@@ -1,14 +1,72 @@
 from datetime import date
 
 import typer
+import csv
+
+from rich.console import Console
+from rich.table import Table
 
 from cascadia_tracker.storage import load_games, save_games
 
 app = typer.Typer()
+console = Console()
 
 def clean_name(name: str) -> str:
     """Standardize player names."""
     return " ".join(name.strip().split()).title()
+
+def calculate_habitat_bonuses(player_results: dict) -> None:
+    """Add habitat majority bonuses to each player's result."""
+
+    habitats = ["mountain", "forest", "prairie", "wetland", "river"]
+    num_players = len(player_results)
+
+    for player in player_results:
+        player_results[player]["habitat_bonus"] = 0
+
+    for habitat in habitats:
+        scores = {
+            player: result["habitats"][habitat]
+            for player, result in player_results.items()
+        }
+
+        max_score = max(scores.values())
+        first_place_players = [
+            player for player, score in scores.items() if score == max_score
+        ]
+
+        if num_players == 2:
+            if len(first_place_players) == 1:
+                player_results[first_place_players[0]]["habitat_bonus"] += 2
+            else:
+                for player in first_place_players:
+                    player_results[player]["habitat_bonus"] += 1
+            continue
+
+        if len(first_place_players) == 1:
+            first_player = first_place_players[0]
+            player_results[first_player]["habitat_bonus"] += 3
+
+            remaining_scores = [
+                score for player, score in scores.items() if player != first_player
+            ]
+            second_score = max(remaining_scores)
+            second_place_players = [
+                player
+                for player, score in scores.items()
+                if player != first_player and score == second_score
+            ]
+
+            if len(second_place_players) == 1:
+                player_results[second_place_players[0]]["habitat_bonus"] += 1
+
+        elif len(first_place_players) == 2:
+            for player in first_place_players:
+                player_results[player]["habitat_bonus"] += 2
+
+        else:
+            for player in first_place_players:
+                player_results[player]["habitat_bonus"] += 1
 
 
 @app.command()
@@ -34,16 +92,6 @@ def add_game():
 
     used_landmarks = typer.confirm("Did you use the landmark expansion?")
     landmarks = []
-
-    if used_landmarks:
-        landmarks_input = typer.prompt(
-            "Landmarks used, like River-G, Prairie-A, Mountain-C"
-        )
-        landmarks = [
-            landmark.strip()
-            for landmark in landmarks_input.split(",")
-            if landmark.strip()
-         ]
     player_results = {}
 
     for player in players:
@@ -54,15 +102,51 @@ def add_game():
         salmon = typer.prompt("Salmon score", type=int)
         hawk = typer.prompt("Hawk score", type=int)
         fox = typer.prompt("Fox score", type=int)
-        habitat = typer.prompt("Habitat score", type=int)
+        habitats = {
+            "mountain": typer.prompt("Mountain corridor score", type=int),
+            "forest": typer.prompt("Forest corridor score", type=int),
+            "prairie": typer.prompt("Prairie corridor score", type=int),
+            "wetland": typer.prompt("Wetland corridor score", type=int),
+            "river": typer.prompt("River corridor score", type=int),
+        }
+
         nature_tokens = typer.prompt("Nature token score", type=int)
 
-        landmark_scores = {}
+        landmark_scores = {
+            "habitat": {},
+            "end_game": {},
+        }
 
         if used_landmarks:
-            for landmark in landmarks:
-                landmark_scores[landmark] = typer.prompt(
-                    f"{landmark} score",
+            habitat_landmarks_input = typer.prompt(
+                f"Habitat-scored landmarks for {player}, like River-G, Prairie-A",
+                default="",
+            )
+            habitat_landmarks = [
+                landmark.strip()
+                for landmark in habitat_landmarks_input.split(",")
+                if landmark.strip()
+            ]
+
+            for landmark in habitat_landmarks:
+                landmark_scores["habitat"][landmark] = typer.prompt(
+                    f"{player}'s {landmark} score during habitat scoring",
+                    type=int,
+                )
+
+            end_game_landmarks_input = typer.prompt(
+                f"End-game landmarks for {player}, like Mountain-C",
+                default="",
+            )
+            end_game_landmarks = [
+                landmark.strip()
+                for landmark in end_game_landmarks_input.split(",")
+                if landmark.strip()
+            ]
+
+            for landmark in end_game_landmarks:
+                landmark_scores["end_game"][landmark] = typer.prompt(
+                    f"{player}'s {landmark} end-game score",
                     type=int,
                 )
         total = (
@@ -71,9 +155,10 @@ def add_game():
             + salmon
             + hawk
             + fox
-            + habitat
+            + sum(habitats.values())
             + nature_tokens
-            + sum(landmark_scores.values())
+            + sum(landmark_scores["habitat"].values())
+            + sum(landmark_scores["end_game"].values())
         )
 
         player_results[player] = {
@@ -82,13 +167,19 @@ def add_game():
             "salmon": salmon,
             "hawk": hawk,
             "fox": fox,
-            "habitat": habitat,
+            "habitats": habitats,
+            "habitat_bonus": 0,
             "nature_tokens": nature_tokens,
             "landmarks": landmark_scores,
             "total": total,
         }
 
         typer.echo(f"Total for {player}: {total}")
+    
+    calculate_habitat_bonuses(player_results)
+
+    for result in player_results.values():
+        result["total"] += result["habitat_bonus"]
 
     winner = max(player_results, key=lambda p: player_results[p]["total"])
 
@@ -99,7 +190,6 @@ def add_game():
         "players": players,
         "scoring_cards": scoring_cards,
         "used_landmarks": used_landmarks,
-        "landmarks": landmarks,
         "results": player_results,
         "winner": winner,
         "notes": notes,
@@ -212,18 +302,19 @@ def landmark_stats():
     landmark_counts = {}
     landmark_scores = {}
 
+
     for game in games:
         if not game["used_landmarks"]:
             continue
 
-        for landmark in game["landmarks"]:
-            landmark_counts[landmark] = landmark_counts.get(landmark, 0) + 1
-            landmark_scores.setdefault(landmark, [])
-
         for result in game["results"].values():
-            for landmark, score in result["landmarks"].items():
-                landmark_scores.setdefault(landmark, [])
-                landmark_scores[landmark].append(score)
+            for score_type in ["habitat", "end_game"]:
+                for landmark, score in result["landmarks"][score_type].items():
+                    key = f"{landmark} ({score_type})"
+
+                    landmark_counts[key] = landmark_counts.get(key, 0) + 1
+                    landmark_scores.setdefault(key, [])
+                    landmark_scores[key].append(score)
 
     if not landmark_counts:
         typer.echo("No landmark games found.")
@@ -253,7 +344,6 @@ def category_stats():
         "salmon",
         "hawk",
         "fox",
-        "habitat",
         "nature_tokens",
     ]
 
@@ -289,3 +379,77 @@ def category_stats():
             f"{category.replace('_', ' ').title()}: "
             f"{best_player} with avg {best_average:.2f}"
         )
+
+@app.command()
+def best_games(limit: int = 10):
+    """Show the best individual scores ever."""
+
+    games = load_games()
+    rows = []
+
+    for game in games:
+        for player, result in game["results"].items():
+            rows.append((result["total"], player, game["date"]))
+
+    if not rows:
+        typer.echo("No games logged yet.")
+        return
+
+    rows.sort(reverse=True)
+
+    table = Table(title="Best Cascadia Games")
+    table.add_column("Rank")
+    table.add_column("Player")
+    table.add_column("Score")
+    table.add_column("Date")
+
+    for rank, (score, player, game_date) in enumerate(rows[:limit], start=1):
+        table.add_row(str(rank), player, str(score), game_date)
+
+    console.print(table)
+
+@app.command()
+def rivalry(player_one: str, player_two: str):
+    """Show head-to-head stats for two players."""
+
+    player_one = clean_name(player_one)
+    player_two = clean_name(player_two)
+
+    games = load_games()
+
+    games_together = 0
+    player_one_wins = 0
+    player_two_wins = 0
+    margins = []
+
+    for game in games:
+        results = game["results"]
+
+        if player_one in results and player_two in results:
+            games_together += 1
+
+            score_one = results[player_one]["total"]
+            score_two = results[player_two]["total"]
+            margins.append(abs(score_one - score_two))
+
+            if score_one > score_two:
+                player_one_wins += 1
+            elif score_two > score_one:
+                player_two_wins += 1
+
+    if games_together == 0:
+        typer.echo(f"No games found with both {player_one} and {player_two}.")
+        return
+
+    avg_margin = sum(margins) / len(margins)
+
+    table = Table(title=f"{player_one} vs {player_two}")
+    table.add_column("Stat")
+    table.add_column("Value")
+
+    table.add_row("Games together", str(games_together))
+    table.add_row(f"{player_one} wins", str(player_one_wins))
+    table.add_row(f"{player_two} wins", str(player_two_wins))
+    table.add_row("Average margin", f"{avg_margin:.2f}")
+
+    console.print(table)
