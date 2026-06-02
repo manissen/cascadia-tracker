@@ -2,6 +2,7 @@ from datetime import date
 
 import typer
 import csv
+import json
 
 from rich.console import Console
 from rich.table import Table
@@ -453,3 +454,83 @@ def rivalry(player_one: str, player_two: str):
     table.add_row("Average margin", f"{avg_margin:.2f}")
 
     console.print(table)
+
+@app.command()
+def export_csv(filename: str = "cascadia_games.csv"):
+    """Export logged games to a CSV file."""
+
+    games = load_games()
+
+    if not games:
+        typer.echo("No games logged yet.")
+        return
+
+    fieldnames = [
+        "date",
+        "player",
+        "total",
+        "winner",
+        "bear",
+        "elk",
+        "salmon",
+        "hawk",
+        "fox",
+        "mountain",
+        "forest",
+        "prairie",
+        "wetland",
+        "river",
+        "habitat_bonus",
+        "nature_tokens",
+        "used_landmarks",
+        "habitat_landmarks",
+        "habitat_landmark_score",
+        "end_game_landmarks",
+        "end_game_landmark_score",
+        "all_landmarks",
+        "notes",
+    ]
+
+    with open(filename, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for game in games:
+            for player, result in game["results"].items():
+                habitat_landmarks = result["landmarks"]["habitat"]
+                end_game_landmarks = result["landmarks"]["end_game"]
+
+                all_landmarks = {
+                    "habitat": habitat_landmarks,
+                    "end_game": end_game_landmarks,
+                }
+
+                writer.writerow(
+                    {
+                        "date": game["date"],
+                        "player": player,
+                        "total": result["total"],
+                        "winner": game["winner"] == player,
+                        "bear": result["bear"],
+                        "elk": result["elk"],
+                        "salmon": result["salmon"],
+                        "hawk": result["hawk"],
+                        "fox": result["fox"],
+                        "mountain": result["habitats"]["mountain"],
+                        "forest": result["habitats"]["forest"],
+                        "prairie": result["habitats"]["prairie"],
+                        "wetland": result["habitats"]["wetland"],
+                        "river": result["habitats"]["river"],
+                        "habitat_bonus": result["habitat_bonus"],
+                        "nature_tokens": result["nature_tokens"],
+                        "used_landmarks": game["used_landmarks"],
+                        "habitat_landmarks": json.dumps(habitat_landmarks),
+                        "habitat_landmark_score": sum(habitat_landmarks.values()),
+                        "end_game_landmarks": json.dumps(end_game_landmarks),
+                        "end_game_landmark_score": sum(end_game_landmarks.values()),
+                        "all_landmarks": json.dumps(all_landmarks),
+                        "notes": game["notes"],
+                    }
+                )
+
+    typer.echo(f"Exported games to {filename}")

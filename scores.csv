@@ -1,0 +1,3 @@
+date,player,total,winner,bear,elk,salmon,hawk,fox,mountain,forest,prairie,wetland,river,habitat_bonus,nature_tokens,used_landmarks,habitat_landmarks,habitat_landmark_score,end_game_landmarks,end_game_landmark_score,all_landmarks,notes
+2026-06-02,Margot Nissen,57,True,1,1,1,1,1,3,4,5,6,5,10,2,True,"{""River-G"": 3}",3,"{""Mountain-B"": 12, ""Prairie-H"": 2}",14,"{""habitat"": {""River-G"": 3}, ""end_game"": {""Mountain-B"": 12, ""Prairie-H"": 2}}",Low scoring game lol
+2026-06-02,Mieko Chun,29,False,2,2,2,2,2,2,2,2,2,2,0,3,True,"{""Mountain-A"": 3}",3,"{""River-A"": 3}",3,"{""habitat"": {""Mountain-A"": 3}, ""end_game"": {""River-A"": 3}}",Low scoring game lol
