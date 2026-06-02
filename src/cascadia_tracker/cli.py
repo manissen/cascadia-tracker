@@ -174,3 +174,28 @@ def player_stats(name: str):
     typer.echo(f"Average score: {average_score:.2f}")
     typer.echo(f"High score: {high_score}")
     typer.echo(f"Low score: {low_score}") 
+    
+@app.command()
+def animal_stats():
+    """Show average score for each wildlife category."""
+
+    games = load_games()
+    animals = ["bear", "elk", "salmon", "hawk", "fox"]
+    totals = {animal: [] for animal in animals}
+
+    for game in games:
+        for result in game["results"].values():
+            for animal in animals:
+                totals[animal].append(result[animal])
+
+    if not games:
+        typer.echo("No games logged yet.")
+        return
+
+    typer.echo("\nAverage Wildlife Scores")
+    typer.echo("-----------------------")
+
+    for animal, scores in totals.items():
+        average = sum(scores) / len(scores)
+        high = max(scores)
+        typer.echo(f"{animal.title()}: avg {average:.2f}, high {high}")
