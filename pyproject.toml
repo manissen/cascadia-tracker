@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-cascadia-tracker = "cascadia_tracker:main"
+cascadia = "cascadia_tracker.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.11.10,<0.12.0"]
