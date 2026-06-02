@@ -241,3 +241,51 @@ def landmark_stats():
             f"{landmark}: used {landmark_counts[landmark]} game(s), "
             f"avg score {avg_score:.2f}, high score {high_score}"
         )
+    
+@app.command()
+def category_stats():
+    """Show each player's average score by category."""
+
+    games = load_games()
+    categories = [
+        "bear",
+        "elk",
+        "salmon",
+        "hawk",
+        "fox",
+        "habitat",
+        "nature_tokens",
+    ]
+
+    player_scores = {}
+
+    for game in games:
+        for player, result in game["results"].items():
+            player_scores.setdefault(player, {category: [] for category in categories})
+
+            for category in categories:
+                player_scores[player][category].append(result[category])
+
+    if not player_scores:
+        typer.echo("No games logged yet.")
+        return
+
+    typer.echo("\nCategory Leaders")
+    typer.echo("----------------")
+
+    for category in categories:
+        best_player = None
+        best_average = -1
+
+        for player, scores_by_category in player_scores.items():
+            scores = scores_by_category[category]
+            average = sum(scores) / len(scores)
+
+            if average > best_average:
+                best_average = average
+                best_player = player
+
+        typer.echo(
+            f"{category.replace('_', ' ').title()}: "
+            f"{best_player} with avg {best_average:.2f}"
+        )
