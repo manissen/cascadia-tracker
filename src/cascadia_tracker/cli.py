@@ -57,10 +57,14 @@ def add_game():
         habitat = typer.prompt("Habitat score", type=int)
         nature_tokens = typer.prompt("Nature token score", type=int)
 
-        landmark_score = 0
-        if used_landmarks:
-            landmark_score = typer.prompt("Landmark score", type=int)
+        landmark_scores = {}
 
+        if used_landmarks:
+            for landmark in landmarks:
+                landmark_scores[landmark] = typer.prompt(
+                    f"{landmark} score",
+                    type=int,
+                )
         total = (
             bear
             + elk
@@ -69,7 +73,7 @@ def add_game():
             + fox
             + habitat
             + nature_tokens
-            + landmark_score
+            + sum(landmark_scores.values())
         )
 
         player_results[player] = {
@@ -80,7 +84,7 @@ def add_game():
             "fox": fox,
             "habitat": habitat,
             "nature_tokens": nature_tokens,
-            "landmark": landmark_score,
+            "landmarks": landmark_scores,
             "total": total,
         }
 
@@ -199,3 +203,41 @@ def animal_stats():
         average = sum(scores) / len(scores)
         high = max(scores)
         typer.echo(f"{animal.title()}: avg {average:.2f}, high {high}")
+
+@app.command()
+def landmark_stats():
+    """Show landmark usage and scoring statistics."""
+
+    games = load_games()
+    landmark_counts = {}
+    landmark_scores = {}
+
+    for game in games:
+        if not game["used_landmarks"]:
+            continue
+
+        for landmark in game["landmarks"]:
+            landmark_counts[landmark] = landmark_counts.get(landmark, 0) + 1
+            landmark_scores.setdefault(landmark, [])
+
+        for result in game["results"].values():
+            for landmark, score in result["landmarks"].items():
+                landmark_scores.setdefault(landmark, [])
+                landmark_scores[landmark].append(score)
+
+    if not landmark_counts:
+        typer.echo("No landmark games found.")
+        return
+
+    typer.echo("\nLandmark Statistics")
+    typer.echo("-------------------")
+
+    for landmark in sorted(landmark_counts, key=landmark_counts.get, reverse=True):
+        scores = landmark_scores[landmark]
+        avg_score = sum(scores) / len(scores)
+        high_score = max(scores)
+
+        typer.echo(
+            f"{landmark}: used {landmark_counts[landmark]} game(s), "
+            f"avg score {avg_score:.2f}, high score {high_score}"
+        )
