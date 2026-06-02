@@ -6,6 +6,10 @@ from cascadia_tracker.storage import load_games, save_games
 
 app = typer.Typer()
 
+def clean_name(name: str) -> str:
+    """Standardize player names."""
+    return " ".join(name.strip().split()).title()
+
 
 @app.command()
 def hello():
@@ -18,7 +22,7 @@ def add_game():
 
     game_date = typer.prompt("Date", default=str(date.today()))
     players = typer.prompt("Players (comma separated)").split(",")
-    players = [p.strip() for p in players]
+    players = [clean_name(p) for p in players if p.strip()]
 
     scoring_cards = {
         "bear": typer.prompt("Bear scoring card"),
@@ -135,3 +139,38 @@ def leaderboard():
         typer.echo(
             f"{row['player']}: {row['score']} points on {row['date']}{winner_mark}"
         )
+
+@app.command()
+def player_stats(name: str):
+    """Show stats for one player."""
+    
+    name = clean_name(name)
+    games = load_games()
+
+    scores = []
+    wins = 0
+
+    for game in games:
+        if name in game["results"]:
+            result = game["results"][name]
+            scores.append(result["total"])
+
+            if game["winner"] == name:
+                wins += 1
+
+    if not scores:
+        typer.echo(f"No games found for {name}.")
+        return
+
+    average_score = sum(scores) / len(scores)
+    high_score = max(scores)
+    low_score = min(scores)
+
+    typer.echo(f"\nStats for {name}")
+    typer.echo("----------------")
+    typer.echo(f"Games played: {len(scores)}")
+    typer.echo(f"Wins: {wins}")
+    typer.echo(f"Win rate: {wins / len(scores):.1%}")
+    typer.echo(f"Average score: {average_score:.2f}")
+    typer.echo(f"High score: {high_score}")
+    typer.echo(f"Low score: {low_score}") 
