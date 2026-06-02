@@ -102,3 +102,36 @@ def add_game():
     save_games(games)
 
     typer.echo(f"\nGame saved! Winner: {winner}")
+    
+@app.command()
+def leaderboard():
+    """Show the top Cascadia scores."""
+
+    games = load_games()
+    scores = []
+
+    for game in games:
+        for player, result in game["results"].items():
+            scores.append(
+                {
+                    "player": player,
+                    "score": result["total"],
+                    "date": game["date"],
+                    "winner": game["winner"] == player,
+                }
+            )
+
+    if not scores:
+        typer.echo("No games logged yet.")
+        return
+
+    scores.sort(key=lambda row: row["score"], reverse=True)
+
+    typer.echo("\nTop Scores")
+    typer.echo("----------")
+
+    for row in scores[:10]:
+        winner_mark = " 🏆" if row["winner"] else ""
+        typer.echo(
+            f"{row['player']}: {row['score']} points on {row['date']}{winner_mark}"
+        )
